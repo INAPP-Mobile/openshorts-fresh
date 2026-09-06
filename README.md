@@ -1,6 +1,6 @@
 # OpenShorts — AI-Powered Vertical Video Generator
 
-[![Deploy to Railway](https://railway.app/button.svg)](https://railway.com/deploy/openshorts-1)
+[![Deploy to Railway](https://railway.app/button.svg)](https://railway.com/deploy/rkdyiI)
 
 OpenShorts turns long-form videos into viral vertical shorts. It offers three tools in one dashboard:
 
