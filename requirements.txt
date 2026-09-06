@@ -1,4 +1,4 @@
-scenedetect
+scenedetect==0.5.5
 ultralytics
 tqdm
 yt-dlp
