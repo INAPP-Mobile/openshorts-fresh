@@ -1,0 +1,50 @@
+{
+  "RAPIDAPI_KEY": {
+    "name": "RAPIDAPI_KEY",
+    "description": "RapidAPI key for the youtube-mp41 downloader. Required to fetch videos from a YouTube URL. Get one at https://rapidapi.com/ytjar/api/youtube-mp41 (the free tier works).",
+    "isOptional": false,
+    "defaultValue": ""
+  },
+  "GEMINI_API_KEY": {
+    "name": "GEMINI_API_KEY",
+    "description": "Google Gemini API key used for AI clip analysis, title/thumbnail generation and voice-over scripts. Get one at https://aistudio.google.com/apikey. The dashboard also allows pasting a key per request.",
+    "isOptional": false,
+    "defaultValue": ""
+  },
+  "MAX_CONCURRENT_JOBS": {
+    "name": "MAX_CONCURRENT_JOBS",
+    "description": "Maximum number of video jobs processed in parallel. Each job uses significant CPU/RAM; raise only on larger Railway plans.",
+    "isOptional": true,
+    "defaultValue": "2"
+  },
+  "AWS_ACCESS_KEY_ID": {
+    "name": "AWS_ACCESS_KEY_ID",
+    "description": "Optional. AWS access key for S3 upload of generated clips (gallery/backup). If unset, clips are only available via the local /videos endpoint.",
+    "isOptional": true,
+    "defaultValue": ""
+  },
+  "AWS_SECRET_ACCESS_KEY": {
+    "name": "AWS_SECRET_ACCESS_KEY",
+    "description": "Optional. AWS secret key paired with AWS_ACCESS_KEY_ID for S3 uploads.",
+    "isOptional": true,
+    "defaultValue": ""
+  },
+  "AWS_REGION": {
+    "name": "AWS_REGION",
+    "description": "Optional. AWS region for the S3 bucket used for clip uploads.",
+    "isOptional": true,
+    "defaultValue": "eu-west-3"
+  },
+  "AWS_S3_BUCKET": {
+    "name": "AWS_S3_BUCKET",
+    "description": "Optional. S3 bucket name where generated clips are uploaded.",
+    "isOptional": true,
+    "defaultValue": ""
+  },
+  "AWS_S3_PUBLIC_BUCKET": {
+    "name": "AWS_S3_PUBLIC_BUCKET",
+    "description": "Optional. Public S3 bucket name whose objects get public URLs in generated pages.",
+    "isOptional": true,
+    "defaultValue": ""
+  }
+}

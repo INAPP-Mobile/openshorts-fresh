@@ -1,0 +1,34 @@
+{
+  "RAPIDAPI_KEY": {
+    "value": "your-rapidapi-key",
+    "description": "REQUIRED. RapidAPI key for the youtube-mp41 downloader. Get one at https://rapidapi.com/ytjar/api/youtube-mp41 (free tier works). Without it, YouTube-URL jobs cannot download the source video."
+  },
+  "GEMINI_API_KEY": {
+    "value": "your-gemini-api-key",
+    "description": "REQUIRED. Google Gemini API key for AI clip analysis, titles/thumbnails and voice-over. Get one at https://aistudio.google.com/apikey. Can also be passed per request via the X-Gemini-Key header."
+  },
+  "MAX_CONCURRENT_JOBS": {
+    "value": "2",
+    "description": "Maximum number of video jobs processed in parallel. Each job is CPU/RAM intensive; lower keeps small Railway plans stable."
+  },
+  "AWS_ACCESS_KEY_ID": {
+    "value": "",
+    "description": "Optional. AWS access key for S3 upload of generated clips."
+  },
+  "AWS_SECRET_ACCESS_KEY": {
+    "value": "",
+    "description": "Optional. AWS secret key paired with AWS_ACCESS_KEY_ID."
+  },
+  "AWS_REGION": {
+    "value": "eu-west-3",
+    "description": "Optional. AWS region for the S3 bucket used for clip uploads."
+  },
+  "AWS_S3_BUCKET": {
+    "value": "",
+    "description": "Optional. S3 bucket name where generated clips are uploaded."
+  },
+  "AWS_S3_PUBLIC_BUCKET": {
+    "value": "",
+    "description": "Optional. Public S3 bucket name whose objects get public URLs in generated pages."
+  }
+}
