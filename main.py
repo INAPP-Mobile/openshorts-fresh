@@ -498,8 +498,7 @@ def _download_via_apify(url, output_dir):
         f"token={token}&waitForFinish=300"
     )
     payload = json.dumps({
-        "startUrls": [{"url": url}],
-        "maxResults": 1,
+        "videos": [{"url": url}],
         "format": "mp4",
         "quality": "best",
     })
