@@ -26,16 +26,26 @@ This is the official one-click Railway template. The dashboard is served same-or
 ## Quick Start
 
 1. Click the **Deploy to Railway** button above.
-2. Railway will prompt you for `RAPIDAPI_KEY` and `GEMINI_API_KEY` — both are required for the full pipeline. Supply them during setup (or add them in the service's Variables tab afterward).
+2. Railway will prompt you for `GEMINI_API_KEY` — this is required for the full pipeline. Supply it during setup (or add it in the service's Variables tab afterward).
 3. Wait for provisioning and the build to finish (first build pulls torch + deps; allow 3–5 minutes).
 4. Open your service URL — the dashboard loads at `/`.
 5. Use the **Clip Generator** tab with a YouTube URL, or upload a local video file.
+
+## YouTube Cookies (Optional)
+
+Some YouTube videos are age-restricted or require login. To download these, provide a browser cookies file:
+
+1. Install a cookies export extension (e.g. [Get cookies.txt LOCALLY](https://chrome.google.com/webstore/detail/get-cookiestxt-clean/ahmfnjeglddpplmkeijbbdbbjhofmlkn) for Chrome).
+2. Log into YouTube in your browser.
+3. Export your cookies to a `cookies.txt` file (Netscape format).
+4. In the OpenShorts dashboard, go to **Settings** → **YouTube Cookies** and upload the file.
+
+The file is saved to a fixed path on the Railway volume and is picked up by yt-dlp immediately — no service restart or path configuration needed.
 
 ## Environment Variables
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `RAPIDAPI_KEY` | Yes | RapidAPI key for the youtube-mp41 downloader (YouTube URL jobs). Get one at https://rapidapi.com/ytjar/api/youtube-mp41 — free tier works. |
 | `GEMINI_API_KEY` | Yes | Google Gemini API key for AI analysis, titles/thumbnails, voice-over. Get one at https://aistudio.google.com/apikey. Can also be passed per request via the `X-Gemini-Key` header. |
 | `MAX_CONCURRENT_JOBS` | No | Max parallel video jobs. Each is CPU/RAM heavy. Default `2`. |
 | `AWS_ACCESS_KEY_ID` | No | Optional AWS access key for S3 upload of generated clips. |
@@ -48,7 +58,6 @@ This is the official one-click Railway template. The dashboard is served same-or
 ## Prerequisites
 
 - A [Railway account](https://railway.app).
-- A [RapidAPI](https://rapidapi.com/ytjar/api/youtube-mp41) key (free tier works).
 - A [Google Gemini](https://aistudio.google.com/apikey) API key.
 - (Optional) an AWS account + S3 bucket if you want the public gallery.
 
@@ -83,7 +92,7 @@ Click the button at the top of this README. Railway builds the image, mounts a p
 
 1. You submit a YouTube URL (or upload a file) with a Gemini key.
 2. The backend queues the job and spawns `main.py` in a subprocess.
-3. If a YouTube URL was given, `youtube-mp41` on RapidAPI downloads the source MP4.
+3. If a YouTube URL was given, yt-dlp fetches the source MP4 locally (no vendor lock-in).
 4. Gemini picks highlight moments; ffmpeg crops each to 9:16 with smart tracking.
 5. `faster-whisper` transcribes audio; subtitles are burned in.
 6. The finished clips land under `/data/output/<job-id>/` and are streamable at `/videos/...`.
@@ -120,7 +129,7 @@ This template runs as a single container with a persistent volume for generated 
 ### Deployment Dependencies
 
 - [Railway Account](https://railway.app) — hosting platform.
-- [RapidAPI — youtube-mp41](https://rapidapi.com/ytjar/api/youtube-mp41) — YouTube video downloader (free tier works).
+- [yt-dlp](https://github.com/yt-dlp/yt-dlp) — YouTube video downloader (bundled with the image, no external token needed).
 - [Google Gemini API](https://aistudio.google.com/apikey) — AI clip detection, titles, thumbnails, voice-over.
 
 No external database, cache or message queue is required. Optional AWS S3 is only needed if you want generated clips mirrored to a public gallery.

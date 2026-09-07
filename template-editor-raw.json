@@ -1,8 +1,4 @@
 {
-  "RAPIDAPI_KEY": {
-    "value": "your-rapidapi-key",
-    "description": "REQUIRED. RapidAPI key for the youtube-mp41 downloader. Get one at https://rapidapi.com/ytjar/api/youtube-mp41 (free tier works). Without it, YouTube-URL jobs cannot download the source video."
-  },
   "GEMINI_API_KEY": {
     "value": "your-gemini-api-key",
     "description": "REQUIRED. Google Gemini API key for AI clip analysis, titles/thumbnails and voice-over. Get one at https://aistudio.google.com/apikey. Can also be passed per request via the X-Gemini-Key header."

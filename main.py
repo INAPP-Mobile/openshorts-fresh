@@ -12,7 +12,6 @@ import torch
 import os
 import numpy as np
 from tqdm import tqdm
-import httpx
 import mediapipe as mp
 # import whisper (replaced by faster_whisper inside function)
 from google import genai
@@ -461,129 +460,93 @@ def _extract_youtube_id(url):
     return m.group(1)
 
 
-def _stream_download(url, output_path, timeout=600):
-    print(f"   → streaming to {output_path}", flush=True)
-    total = 0
-    last_report = time.time()
-    with httpx.stream("GET", url, follow_redirects=True, timeout=timeout) as r:
-        print(f"   → HTTP {r.status_code}, content-length={r.headers.get('content-length','?')}", flush=True)
-        r.raise_for_status()
-        with open(output_path, "wb") as f:
-            for chunk in r.iter_bytes(chunk_size=1024 * 1024):
-                f.write(chunk)
-                total += len(chunk)
-                now = time.time()
-                if now - last_report >= 3:
-                    print(f"   → {total/(1024*1024):.1f} MB downloaded", flush=True)
-                    last_report = now
-    print(f"   → done: {total/(1024*1024):.1f} MB", flush=True)
 
 
-_YOUTUBE_MP41_HOST = "youtube-mp41.p.rapidapi.com"
-_YOUTUBE_MP41_QUALITY = "1080"
-_YOUTUBE_MP41_POLL_INTERVAL = 2.0
-_YOUTUBE_MP41_POLL_TIMEOUT = 1800.0
+
+
 
 
 def download_youtube_video(url, output_dir="."):
     """
-    Downloads a YouTube video via the youtube-mp41 RapidAPI, which runs the
-    conversion on its own infrastructure and serves the finished MP4 from its
-    own CDN (so the download URL is not an IP-bound googlevideo.com link).
+    Download a YouTube video via yt-dlp.
+
+    If YT_DLP_COOKIES is set to a file path, yt-dlp reads cookies from it
+    (Netscape format — export with a browser extension). Useful for videos
+    that require login / age verification.
+
     Returns (path_to_mp4, sanitized_title).
     """
+    print("Downloading via yt-dlp...", flush=True)
+    step_start = time.time()
+
+    out_template = os.path.join(output_dir, "%(title)s.%(ext)s")
+
+    cmd = [
+        "yt-dlp",
+        "-f", "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
+        "--merge-output-format", "mp4",
+        "-o", out_template,
+        "--no-playlist",
+        "--no-warnings",
+        "--progress",
+    ]
+
+    # Optional cookies file for age-restricted / login-gated videos
+    cookies_path = os.environ.get("YT_DLP_COOKIES")
+    if cookies_path:
+        if os.path.exists(cookies_path):
+            cmd.extend(["--cookies", cookies_path])
+            print(f"   → Using cookies file: {cookies_path}", flush=True)
+        else:
+            print(f"   ⚠ YT_DLP_COOKIES={cookies_path} not found, proceeding without cookies",
+                  flush=True)
+
+    cmd.append(url)
+
+    print(f"   → Running: {' '.join(cmd)}", flush=True)
     try:
-        return _download_youtube_video_impl(url, output_dir)
-    except Exception:
-        import traceback
-        print("❌ download_youtube_video failed — full traceback below:", flush=True)
-        traceback.print_exc()
-        sys.stdout.flush()
-        sys.stderr.flush()
-        raise
-
-
-def _download_youtube_video_impl(url, output_dir="."):
-    print("📥 Downloading video via RapidAPI (youtube-mp41)...", flush=True)
-    step_start_time = time.time()
-
-    api_key = os.environ.get("RAPIDAPI_KEY")
-    if not api_key:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+    except FileNotFoundError:
         raise RuntimeError(
-            "RAPIDAPI_KEY environment variable is not set. "
-            "Add it to your .env file (see .env.example)."
+            "yt-dlp is not installed. Ensure 'yt-dlp' is in requirements.txt "
+            "and present in the Docker image."
         )
 
-    video_id = _extract_youtube_id(url)
-    headers = {
-        "x-rapidapi-key": api_key,
-        "x-rapidapi-host": _YOUTUBE_MP41_HOST,
-    }
+    if result.returncode != 0:
+        stderr = result.stderr[-1000:] if result.stderr else ""
+        raise RuntimeError(f"yt-dlp failed (exit {result.returncode}): {stderr}")
 
-    with httpx.Client(timeout=30.0, headers=headers) as client:
-        start_resp = client.get(
-            f"https://{_YOUTUBE_MP41_HOST}/api/v1/download",
-            params={"id": video_id, "format": _YOUTUBE_MP41_QUALITY},
-        )
-        start_resp.raise_for_status()
-        start_data = start_resp.json()
-
-        if not start_data.get("success") or not start_data.get("progressId"):
-            raise RuntimeError(
-                f"youtube-mp41 did not return a progressId: {str(start_data)[:300]}"
-            )
-
-        video_title = start_data.get("title") or "youtube_video"
-        progress_id = start_data["progressId"]
-        print(
-            f"🎞️  job started: progressId={progress_id} "
-            f"title={video_title!r} quality={_YOUTUBE_MP41_QUALITY}p",
-            flush=True,
-        )
-
-        poll_deadline = time.time() + _YOUTUBE_MP41_POLL_TIMEOUT
-        last_status_line = None
-        download_url = None
-        while True:
-            p_resp = client.get(
-                f"https://{_YOUTUBE_MP41_HOST}/api/v1/progress",
-                params={"id": progress_id},
-            )
-            p_resp.raise_for_status()
-            p_data = p_resp.json()
-
-            status = p_data.get("status", "?")
-            progress = p_data.get("progress", 0)
-            status_line = f"{status} ({progress}/1000)"
-            if status_line != last_status_line:
-                print(f"   → {status_line}", flush=True)
-                last_status_line = status_line
-
-            if p_data.get("finished") and p_data.get("downloadUrl"):
-                download_url = p_data["downloadUrl"]
+    # Find the output file — yt-dlp sanitizes the title itself
+    final_path = None
+    for line in result.stdout.splitlines():
+        if "Destination:" in line:
+            dest = line.split("Destination:", 1)[1].strip()
+            if os.path.exists(dest):
+                final_path = dest
+                break
+        if "Merging formats into" in line:
+            m = re.search(r'"(.+?)"', line)
+            if m and os.path.exists(m.group(1)):
+                final_path = m.group(1)
                 break
 
-            if time.time() > poll_deadline:
-                raise RuntimeError(
-                    f"youtube-mp41 job timed out after "
-                    f"{_YOUTUBE_MP41_POLL_TIMEOUT:.0f}s at {status_line}"
-                )
-            time.sleep(_YOUTUBE_MP41_POLL_INTERVAL)
+    if not final_path:
+        import glob
+        mp4s = glob.glob(os.path.join(output_dir, "*.mp4"))
+        mp4s = [f for f in mp4s if os.path.getmtime(f) > step_start - 5]
+        if mp4s:
+            final_path = max(mp4s, key=os.path.getmtime)
 
-    sanitized_title = sanitize_filename(video_title)
-    final_output = os.path.join(output_dir, f"{sanitized_title}.mp4")
-    if os.path.exists(final_output):
-        os.remove(final_output)
+    if not final_path or not os.path.exists(final_path):
+        raise RuntimeError(
+            f"yt-dlp finished but output file not found in {output_dir}. "
+            f"Stdout tail: {result.stdout[-500:]}"
+        )
 
-    print("📥 Fetching finished MP4 from vendor CDN...", flush=True)
-    _stream_download(download_url, final_output)
-
-    step_end_time = time.time()
-    print(
-        f"✅ Video downloaded in {step_end_time - step_start_time:.2f}s: {final_output}",
-        flush=True,
-    )
-    return final_output, sanitized_title
+    title = os.path.splitext(os.path.basename(final_path))[0]
+    elapsed = time.time() - step_start
+    print(f"Video downloaded in {elapsed:.2f}s: {final_path}", flush=True)
+    return final_path, title
 
 def process_video_to_vertical(input_video, final_output_video):
     """

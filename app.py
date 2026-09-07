@@ -24,8 +24,10 @@ load_dotenv()
 # on a Railway volume (e.g. OUTPUT_DIR=/data/output) instead of the image's cwd.
 UPLOAD_DIR = os.environ.get("UPLOAD_DIR", "uploads")
 OUTPUT_DIR = os.environ.get("OUTPUT_DIR", "output")
+COOKIES_DIR = os.environ.get("COOKIES_DIR", "/data/cookies")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(OUTPUT_DIR, exist_ok=True)
+os.makedirs(COOKIES_DIR, exist_ok=True)
 
 # Configuration
 # Default to 1 if not set, but user can set higher for powerful servers
@@ -162,6 +164,11 @@ async def run_job_wrapper(job_id):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # On startup, activate cookies if a file exists on the volume
+    cookie_path = os.path.join(COOKIES_DIR, COOKIE_FILE_NAME)
+    if os.path.isfile(cookie_path):
+        os.environ["YT_DLP_COOKIES"] = cookie_path
+        print(f"🍪 Loaded YouTube cookies from {cookie_path}")
     # Start worker and cleanup
     worker_task = asyncio.create_task(process_queue())
     cleanup_task = asyncio.create_task(cleanup_jobs())
@@ -2236,6 +2243,66 @@ async def health():
         "output_dir": OUTPUT_DIR,
         "max_concurrent_jobs": MAX_CONCURRENT_JOBS,
     }
+
+
+# ── YouTube cookies upload ──────────────────────────────────────────────────
+# Users can upload a Netscape-format cookies.txt via the dashboard Settings
+# tab. The file is saved to a fixed path on the Railway volume and the env
+# var YT_DLP_COOKIES is updated live so all future yt-dlp subprocesses pick
+# it up without a service restart.
+COOKIE_FILE_NAME = "youtube.txt"
+
+
+@app.get("/api/cookies/status")
+async def cookies_status():
+    """Report whether a cookie file is currently active."""
+    cookie_path = os.path.join(COOKIES_DIR, COOKIE_FILE_NAME)
+    exists = os.path.isfile(cookie_path)
+    return {
+        "active": exists,
+        "path": cookie_path if exists else None,
+        "size": os.path.getsize(cookie_path) if exists else 0,
+    }
+
+
+@app.post("/api/cookies/upload")
+async def cookies_upload(file: UploadFile = File(...)):
+    """Upload a Netscape-format cookies.txt for yt-dlp.
+
+    The file is written to a fixed path on the volume and the env var
+    YT_DLP_COOKIES is updated in-process so subsequent subprocess calls
+    inherit it without a restart.
+    """
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="No file provided")
+
+    cookie_path = os.path.join(COOKIES_DIR, COOKIE_FILE_NAME)
+
+    # Stream write to avoid buffering the whole file in memory.
+    with open(cookie_path, "wb") as buf:
+        while chunk := await file.read(1024 * 1024):
+            buf.write(chunk)
+
+    # Update the env var in-process so all future subprocesses inherit it.
+    os.environ["YT_DLP_COOKIES"] = cookie_path
+
+    return {
+        "status": "ok",
+        "path": cookie_path,
+        "size": os.path.getsize(cookie_path),
+    }
+
+
+@app.delete("/api/cookies")
+async def cookies_delete():
+    """Remove the active cookie file and clear the env var."""
+    cookie_path = os.path.join(COOKIES_DIR, COOKIE_FILE_NAME)
+    existed = False
+    if os.path.isfile(cookie_path):
+        os.remove(cookie_path)
+        existed = True
+    os.environ.pop("YT_DLP_COOKIES", None)
+    return {"status": "ok", "deleted": existed}
 
 # ── Static frontend (pre-built React dashboard, same origin) ───────────────
 # The dashboard is built in the builder stage of the Dockerfile and copied
