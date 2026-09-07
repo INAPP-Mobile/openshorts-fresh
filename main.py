@@ -5,6 +5,8 @@ import subprocess
 import argparse
 import re
 import sys
+import urllib.request
+import urllib.error
 from scenedetect import VideoManager, SceneManager
 from scenedetect.detectors import ContentDetector
 from ultralytics import YOLO
@@ -466,18 +468,127 @@ def _extract_youtube_id(url):
 
 
 
-def download_youtube_video(url, output_dir="."):
-    """
-    Download a YouTube video via yt-dlp.
+def _extract_video_id(url):
+    """Extract YouTube video ID from various URL formats."""
+    m = re.search(r'(?:v=|youtu\.be/|youtube\.com/shorts/)([A-Za-z0-9_-]{11})', url)
+    return m.group(1) if m else None
 
-    If YT_DLP_COOKIES is set to a file path, yt-dlp reads cookies from it
-    (Netscape format — export with a browser extension). Useful for videos
-    that require login / age verification.
+
+def _download_via_apify(url, output_dir):
+    """
+    Download via Apify's YouTube Video Downloader actor.
+    Apify runs in a residential network, bypassing YouTube's datacenter-IP
+    bot checks. Requires APIFY_TOKEN (free tier: $5/month usage).
 
     Returns (path_to_mp4, sanitized_title).
     """
-    print("Downloading via yt-dlp...", flush=True)
+    token = os.environ.get("APIFY_TOKEN", "").strip()
+    if not token:
+        raise RuntimeError("APIFY_TOKEN not set")
+
+    video_id = _extract_video_id(url) or "video"
+    print(f"   → Using Apify actor (residential network, bypasses YouTube bot check)...", flush=True)
+
+    import http.client
+    conn = http.client.HTTPSConnection("api.apify.com")
+
+    # Run the actor synchronously with output limit
+    run_url = (
+        f"/v2/acts/streamers~youtube-video-downloader/runs?"
+        f"token={token}&waitForFinish=300"
+    )
+    payload = json.dumps({
+        "startUrls": [{"url": url}],
+        "maxResults": 1,
+        "format": "mp4",
+        "quality": "best",
+    })
+
+    print(f"   → Starting Apify actor...", flush=True)
+    conn.request("POST", run_url, payload, {"Content-Type": "application/json"})
+    resp = conn.getresponse()
+    body_bytes = resp.read()
+    if resp.status != 201:
+        body = body_bytes.decode()[:500]
+        raise RuntimeError(f"Apify actor start failed (HTTP {resp.status}): {body}")
+
+    run_info = json.loads(body_bytes.decode() if resp.status == 201 else b"{}")
+    run_id = run_info.get("data", {}).get("id")
+    if not run_id:
+        raise RuntimeError(f"Apify actor did not return a run ID: {run_info}")
+
+    # Poll for completion
+    print(f"   → Waiting for Apify run {run_id}...", flush=True)
+    start = time.time()
+    dataset_id = None
+    while time.time() - start < 300:
+        conn.request("GET", f"/v2/acts/streamers~youtube-video-downloader/runs/{run_id}?token={token}")
+        resp = conn.getresponse()
+        if resp.status == 200:
+            status = json.loads(resp.read().decode())
+            state = status.get("data", {}).get("status")
+            if state == "SUCCEEDED":
+                dataset_id = status["data"].get("defaultDatasetId")
+                break
+            elif state in ("FAILED", "ABORTED", "TIMING-OUT"):
+                raise RuntimeError(f"Apify run {state}: {status.get('data', {})}")
+        time.sleep(5)
+
+    if not dataset_id:
+        raise RuntimeError(f"Apify run timed out after {time.time() - start:.0f}s")
+
+    # Fetch dataset items
+    print(f"   → Fetching download URL from dataset...", flush=True)
+    conn.request("GET", f"/v2/datasets/{dataset_id}/items?token={token}")
+    resp = conn.getresponse()
+    if resp.status != 200:
+        raise RuntimeError(f"Failed to fetch Apify dataset (HTTP {resp.status})")
+
+    items = json.loads(resp.read().decode())
+    if not items:
+        raise RuntimeError("Apify actor returned empty dataset")
+
+    item = items[0]
+    download_url = item.get("downloadUrl") or item.get("url")
+    title = item.get("title", video_id)
+
+    if not download_url:
+        raise RuntimeError(f"No download URL in Apify result: {item}")
+
+    # Download the file
+    safe_title = re.sub(r'[^\w\s-]', '', title).strip() or video_id
+    out_path = os.path.join(output_dir, f"{safe_title}.mp4")
+    print(f"   → Downloading from Apify: {download_url[:80]}...", flush=True)
+    urllib.request.urlretrieve(download_url, out_path)
+    print(f"   → Saved: {out_path} ({os.path.getsize(out_path) / 1024 / 1024:.1f} MB)", flush=True)
+
+    conn.close()
+    return out_path, safe_title
+
+
+def download_youtube_video(url, output_dir="."):
+    """
+    Download a YouTube video. Uses Apify (residential network) if APIFY_TOKEN
+    is set, otherwise falls back to yt-dlp (local, may fail on datacenter IPs).
+
+    If YT_DLP_COOKIES is set, yt-dlp reads cookies from that Netscape-format file.
+
+    Returns (path_to_mp4, sanitized_title).
+    """
     step_start = time.time()
+
+    # Try Apify first — runs on residential network, bypasses YouTube bot checks
+    if os.environ.get("APIFY_TOKEN", "").strip():
+        try:
+            result = _download_via_apify(url, output_dir)
+            print(f"Video downloaded via Apify in {time.time() - step_start:.2f}s", flush=True)
+            return result
+        except Exception as e:
+            print(f"   ⚠ Apify failed: {e}", flush=True)
+            print("   → Falling back to yt-dlp...", flush=True)
+
+    # Fallback: yt-dlp
+    print("Downloading via yt-dlp...", flush=True)
 
     out_template = os.path.join(output_dir, "%(title)s.%(ext)s")
 

@@ -3,6 +3,10 @@
     "value": "your-gemini-api-key",
     "description": "REQUIRED. Google Gemini API key for AI clip analysis, titles/thumbnails and voice-over. Get one at https://aistudio.google.com/apikey. Can also be passed per request via the X-Gemini-Key header."
   },
+  "APIFY_TOKEN": {
+    "value": "",
+    "description": "Optional. Apify token for YouTube downloads. Apify runs on residential IPs, bypassing YouTube's datacenter-IP bot checks. Free tier includes $5/month usage. Sign up at https://apify.com. If not set, falls back to yt-dlp (may fail on Railway's AWS/GCP IPs)."
+  },
   "MAX_CONCURRENT_JOBS": {
     "value": "2",
     "description": "Maximum number of video jobs processed in parallel. Each job is CPU/RAM intensive; lower keeps small Railway plans stable."

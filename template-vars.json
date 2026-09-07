@@ -5,6 +5,12 @@
     "isOptional": false,
     "defaultValue": ""
   },
+  "APIFY_TOKEN": {
+    "name": "APIFY_TOKEN",
+    "description": "Optional. Apify token for YouTube downloads. Apify runs on residential IPs, bypassing YouTube's datacenter-IP bot checks. Free tier includes $5/month usage. Sign up at https://apify.com. If unset, falls back to yt-dlp (may fail on Railway's AWS/GCP IPs).",
+    "isOptional": true,
+    "defaultValue": ""
+  },
   "MAX_CONCURRENT_JOBS": {
     "name": "MAX_CONCURRENT_JOBS",
     "description": "Maximum number of video jobs processed in parallel. Each job uses significant CPU/RAM; raise only on larger Railway plans.",
