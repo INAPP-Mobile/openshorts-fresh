@@ -25,9 +25,11 @@ load_dotenv()
 UPLOAD_DIR = os.environ.get("UPLOAD_DIR", "uploads")
 OUTPUT_DIR = os.environ.get("OUTPUT_DIR", "output")
 COOKIES_DIR = os.environ.get("COOKIES_DIR", "/data/cookies")
+SETTINGS_DIR = os.environ.get("SETTINGS_DIR", "/data/settings")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 os.makedirs(COOKIES_DIR, exist_ok=True)
+os.makedirs(SETTINGS_DIR, exist_ok=True)
 
 # Configuration
 # Default to 1 if not set, but user can set higher for powerful servers
@@ -169,6 +171,11 @@ async def lifespan(app: FastAPI):
     if os.path.isfile(cookie_path):
         os.environ["YT_DLP_COOKIES"] = cookie_path
         print(f"🍪 Loaded YouTube cookies from {cookie_path}")
+    # Load persisted settings (APIFY_TOKEN) from volume
+    persisted = _read_settings()
+    for key, val in persisted.items():
+        os.environ[key] = val
+        print(f"⚙️ Loaded setting {key} from volume")
     # Start worker and cleanup
     worker_task = asyncio.create_task(process_queue())
     cleanup_task = asyncio.create_task(cleanup_jobs())
@@ -2303,6 +2310,78 @@ async def cookies_delete():
         existed = True
     os.environ.pop("YT_DLP_COOKIES", None)
     return {"status": "ok", "deleted": existed}
+
+
+# ── Settings (Apify token, persisted on volume) ────────────────────────────
+SETTINGS_FILE = "settings.json"
+# Fields that can be persisted via this endpoint.
+_SETTABLE_KEYS = {"APIFY_TOKEN"}
+
+
+def _read_settings() -> dict:
+    """Read persisted settings from the volume. Missing file = empty dict."""
+    path = os.path.join(SETTINGS_DIR, SETTINGS_FILE)
+    if not os.path.isfile(path):
+        return {}
+    try:
+        with open(path, "r", encoding="utf-8") as fh:
+            return json.load(fh)
+    except (json.JSONDecodeError, OSError):
+        return {}
+
+
+def _write_settings(data: dict) -> None:
+    """Atomically write settings to the volume."""
+    path = os.path.join(SETTINGS_DIR, SETTINGS_FILE)
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as fh:
+        json.dump(data, fh, indent=2)
+    os.replace(tmp, path)
+
+
+@app.get("/api/settings")
+async def settings_get():
+    """Return current settings state (which keys are set, not their values)."""
+    persisted = _read_settings()
+    result = {}
+    for key in _SETTABLE_KEYS:
+        val = persisted.get(key, "")
+        result[key] = {
+            "set": bool(val),
+            "masked": ("••••••••" + val[-4:] if len(val) > 4 else "••••") if val else "",
+        }
+    # Report live env-source for APIFY_TOKEN so the UI can show where it came from
+    env_token = os.environ.get("APIFY_TOKEN", "").strip()
+    if "APIFY_TOKEN" in result:
+        result["APIFY_TOKEN"]["from_env"] = bool(env_token) and not bool(persisted.get("APIFY_TOKEN"))
+    return result
+
+
+@app.post("/api/settings")
+async def settings_update(payload: dict):
+    """Update settings. Only keys in _SETTABLE_KEYS are accepted.
+    Values are persisted to the volume and applied to os.environ live."""
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=400, detail="JSON object required")
+    # Filter to only allowed keys
+    updates = {k: v for k, v in payload.items() if k in _SETTABLE_KEYS and isinstance(v, str)}
+    if not updates:
+        raise HTTPException(status_code=400, detail="No valid settings to update")
+
+    persisted = _read_settings()
+    for key, val in updates.items():
+        stripped = val.strip()
+        if stripped:
+            persisted[key] = stripped
+            os.environ[key] = stripped
+        else:
+            # Empty string = clear the setting
+            persisted.pop(key, None)
+            os.environ.pop(key, None)
+    _write_settings(persisted)
+
+    return settings_get()
+
 
 # ── Static frontend (pre-built React dashboard, same origin) ───────────────
 # The dashboard is built in the builder stage of the Dockerfile and copied

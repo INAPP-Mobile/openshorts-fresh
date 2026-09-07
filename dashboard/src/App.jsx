@@ -5,6 +5,7 @@ import MediaInput from './components/MediaInput';
 import ResultCard from './components/ResultCard';
 import ProcessingAnimation from './components/ProcessingAnimation';
 import CookiesUpload from './components/CookiesUpload';
+import ApifyToken from './components/ApifyToken';
 // import Gallery from './components/Gallery';
 import ThumbnailStudio from './components/ThumbnailStudio';
 import SaaShortsTab from './components/SaaShortsTab';
@@ -680,6 +681,8 @@ function App() {
                   </p>
                 </div>
               </div>
+
+              <ApifyToken />
 
               <CookiesUpload />
             </div>
