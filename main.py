@@ -548,7 +548,7 @@ def _download_via_apify(url, output_dir):
         raise RuntimeError("Apify actor returned empty dataset")
 
     item = items[0]
-    download_url = item.get("downloadUrl") or item.get("url")
+    download_url = item.get("downloadedFileUrl") or item.get("downloadUrl") or item.get("url")
     title = item.get("title", video_id)
 
     if not download_url:
