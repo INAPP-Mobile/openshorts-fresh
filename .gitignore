@@ -33,6 +33,10 @@ output/
 # Cache dirs
 .cache/
 .config/
+
+# Dashboard build artifacts
+dashboard/node_modules/
+dashboard/dist/
 # Multi-agent Skills
 .agents/
 .agent/
