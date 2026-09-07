@@ -483,15 +483,15 @@ def download_youtube_video(url, output_dir="."):
 
     # yt-dlp extractor arguments to try, in order.
     # YouTube serves different responses based on IP type (residential vs datacenter)
-    # and enables SABR-only streaming experiments that break the Android client.
+    # and enables bot-check pages that require fresh login cookies.
     # We try each extractor config until one yields a downloadable format.
     extractor_fallbacks = [
+        # TV HTML5 embedded — sometimes bypasses the "confirm you're not a bot" gate
+        ["--extractor-args", "youtube:player_client=tv_embedded,web_embedded"],
         # Android client — works on residential IPs, bypasses consent gates
         ["--extractor-args", "youtube:player_client=android"],
         # Default web client — Node.js (in Docker image) solves JS challenges
         [],
-        # Web embedded — sometimes unblocked when main web is rate-limited
-        ["--extractor-args", "youtube:player_client=web_embedded"],
     ]
 
     last_error = None
@@ -542,6 +542,16 @@ def download_youtube_video(url, output_dir="."):
         print(f"   ⚠ Attempt failed: {last_error}", flush=True)
 
     if last_error:
+        # If all attempts failed with a bot-check error, give the user actionable advice
+        if "confirm you" in last_error.lower() or "sign in" in last_error.lower():
+            raise RuntimeError(
+                f"{last_error}\n\n"
+                "YouTube is blocking datacenter IPs (Railway runs on AWS/GCP).\n"
+                "Fix: re-export cookies from a browser where you're LOGGED IN to YouTube:\n"
+                "  1. Open Chrome → youtube.com → confirm you're signed in\n"
+                "  2. Use 'Get cookies.txt LOCALLY' extension → export\n"
+                "  3. Re-upload in dashboard Settings → YouTube Cookies"
+            )
         raise RuntimeError(last_error)
 
     # Find the output file — yt-dlp sanitizes the title itself
