@@ -489,6 +489,9 @@ def download_youtube_video(url, output_dir="."):
         "--no-playlist",
         "--no-warnings",
         "--progress",
+        # Use Android player client to bypass "page needs to be reloaded" errors
+        # from YouTube's bot detection / consent pages.
+        "--extractor-args", "youtube:player_client=android",
     ]
 
     # Optional cookies file for age-restricted / login-gated videos
