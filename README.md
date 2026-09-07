@@ -14,6 +14,8 @@ This is the official one-click Railway template. The dashboard is served same-or
 
 ## Features
 
+- **YouTube downloading via Apify** — residential-network downloads bypass YouTube's datacenter-IP bot checks (includes $5/month free tier).
+- **yt-dlp fallback** — optional local downloader if you prefer not to use Apify (may fail on Railway's AWS/GCP IPs).
 - **AI clip detection** — Gemini analyses long videos and picks the most viral moments.
 - **Vertical crop with smart tracking** — auto-faces/peaks keep subjects centred in 9:16.
 - **Burned subtitles** — faster-whisper transcription, baked into the final MP4.
@@ -27,9 +29,10 @@ This is the official one-click Railway template. The dashboard is served same-or
 
 1. Click the **Deploy to Railway** button above.
 2. Railway will prompt you for `GEMINI_API_KEY` — this is required for the full pipeline. Supply it during setup (or add it in the service's Variables tab afterward).
-3. Wait for provisioning and the build to finish (first build pulls torch + deps; allow 3–5 minutes).
-4. Open your service URL — the dashboard loads at `/`.
-5. Use the **Clip Generator** tab with a YouTube URL, or upload a local video file.
+3. (Optional) Set `APIFY_TOKEN` for YouTube downloading via Apify — residential-network downloads bypass YouTube bot checks. Free tier includes $5/month usage.
+4. Wait for provisioning and the build to finish (first build pulls torch + deps; allow 3–5 minutes).
+5. Open your service URL — the dashboard loads at `/`.
+6. Use the **Clip Generator** tab with a YouTube URL, or upload a local video file.
 
 ## YouTube Cookies (Optional)
 
@@ -46,8 +49,9 @@ The file is saved to a fixed path on the Railway volume and is picked up by yt-d
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `GEMINI_API_KEY` | Yes | Google Gemini API key for AI analysis, titles/thumbnails, voice-over. Get one at https://aistudio.google.com/apikey. Can also be passed per request via the `X-Gemini-Key` header. |
-| `MAX_CONCURRENT_JOBS` | No | Max parallel video jobs. Each is CPU/RAM heavy. Default `2`. |
+|| `GEMINI_API_KEY` | Yes | Google Gemini API key for AI analysis, titles/thumbnails, voice-over. Get one at https://aistudio.google.com/apikey. Can also be passed per request via the `X-Gemini-Key` header. |
+|| `APIFY_TOKEN` | No | Apify token for YouTube downloading. Residential-network downloads bypass YouTube's datacenter-IP bot checks. Free tier includes $5/month usage. If unset, falls back to yt-dlp. |
+|| `MAX_CONCURRENT_JOBS` | No | Max parallel video jobs. Each is CPU/RAM heavy. Default `2`. |
 | `AWS_ACCESS_KEY_ID` | No | Optional AWS access key for S3 upload of generated clips. |
 | `AWS_SECRET_ACCESS_KEY` | No | Optional AWS secret key paired with `AWS_ACCESS_KEY_ID`. |
 | `AWS_REGION` | No | Optional AWS region. Default `eu-west-3`. |
