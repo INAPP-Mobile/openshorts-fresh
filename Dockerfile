@@ -22,10 +22,13 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 # Runtime system deps:
 #  - ffmpeg: video pipeline (clipping, cropping, subtitles, hooks)
 #  - libgl1/libglib2.0-0/libsm6/libxext6/libxrender1: OpenCV (ultralytics) + mediapipe
+#  - nodejs: yt-dlp JS challenge solver (YouTube serves JS challenges to datacenter IPs)
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         ffmpeg \
         curl \
+        nodejs \
+        npm \
         libgl1 \
         libglib2.0-0 \
         libsm6 \

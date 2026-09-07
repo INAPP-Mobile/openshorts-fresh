@@ -492,6 +492,11 @@ def download_youtube_video(url, output_dir="."):
         # Use Android player client to bypass "page needs to be reloaded" errors
         # from YouTube's bot detection / consent pages.
         "--extractor-args", "youtube:player_client=android",
+        # Retry on transient failures (YouTube rate limits, network blips)
+        "--retries", "3",
+        "--fragment-retries", "3",
+        # Spoof User-Agent to avoid bot detection
+        "--user-agent", "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Mobile Safari/537.36",
     ]
 
     # Optional cookies file for age-restricted / login-gated videos
