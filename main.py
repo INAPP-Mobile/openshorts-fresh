@@ -481,48 +481,68 @@ def download_youtube_video(url, output_dir="."):
 
     out_template = os.path.join(output_dir, "%(title)s.%(ext)s")
 
-    cmd = [
-        "yt-dlp",
-        "-f", "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
-        "--merge-output-format", "mp4",
-        "-o", out_template,
-        "--no-playlist",
-        "--no-warnings",
-        "--progress",
-        # Use Android player client to bypass "page needs to be reloaded" errors
-        # from YouTube's bot detection / consent pages.
-        "--extractor-args", "youtube:player_client=android",
-        # Retry on transient failures (YouTube rate limits, network blips)
-        "--retries", "3",
-        "--fragment-retries", "3",
-        # Spoof User-Agent to avoid bot detection
-        "--user-agent", "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Mobile Safari/537.36",
+    # yt-dlp extractor arguments to try, in order.
+    # YouTube serves different responses based on IP type (residential vs datacenter)
+    # and enables SABR-only streaming experiments that break the Android client.
+    # We try each extractor config until one yields a downloadable format.
+    extractor_fallbacks = [
+        # Android client — works on residential IPs, bypasses consent gates
+        ["--extractor-args", "youtube:player_client=android"],
+        # Default web client — Node.js (in Docker image) solves JS challenges
+        [],
+        # Web embedded — sometimes unblocked when main web is rate-limited
+        ["--extractor-args", "youtube:player_client=web_embedded"],
     ]
 
-    # Optional cookies file for age-restricted / login-gated videos
-    cookies_path = os.environ.get("YT_DLP_COOKIES")
-    if cookies_path:
-        if os.path.exists(cookies_path):
-            cmd.extend(["--cookies", cookies_path])
-            print(f"   → Using cookies file: {cookies_path}", flush=True)
-        else:
-            print(f"   ⚠ YT_DLP_COOKIES={cookies_path} not found, proceeding without cookies",
-                  flush=True)
+    last_error = None
+    for extractor_args in extractor_fallbacks:
+        cmd = [
+            "yt-dlp",
+            "-f", "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
+            "--merge-output-format", "mp4",
+            "-o", out_template,
+            "--no-playlist",
+            "--no-warnings",
+            "--progress",
+            # Retry on transient failures (YouTube rate limits, network blips)
+            "--retries", "3",
+            "--fragment-retries", "3",
+            # Spoof User-Agent to avoid bot detection
+            "--user-agent", "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Mobile Safari/537.36",
+        ]
+        cmd.extend(extractor_args)
 
-    cmd.append(url)
+        # Optional cookies file for age-restricted / login-gated videos
+        cookies_path = os.environ.get("YT_DLP_COOKIES")
+        if cookies_path:
+            if os.path.exists(cookies_path):
+                cmd.extend(["--cookies", cookies_path])
+                print(f"   → Using cookies file: {cookies_path}", flush=True)
+            else:
+                print(f"   ⚠ YT_DLP_COOKIES={cookies_path} not found, proceeding without cookies",
+                      flush=True)
 
-    print(f"   → Running: {' '.join(cmd)}", flush=True)
-    try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
-    except FileNotFoundError:
-        raise RuntimeError(
-            "yt-dlp is not installed. Ensure 'yt-dlp' is in requirements.txt "
-            "and present in the Docker image."
-        )
+        cmd.append(url)
 
-    if result.returncode != 0:
+        print(f"   → Running: {' '.join(cmd)}", flush=True)
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+        except FileNotFoundError:
+            raise RuntimeError(
+                "yt-dlp is not installed. Ensure 'yt-dlp' is in requirements.txt "
+                "and present in the Docker image."
+            )
+
+        if result.returncode == 0:
+            last_error = None
+            break
+
         stderr = result.stderr[-1000:] if result.stderr else ""
-        raise RuntimeError(f"yt-dlp failed (exit {result.returncode}): {stderr}")
+        last_error = f"yt-dlp failed (exit {result.returncode}): {stderr}"
+        print(f"   ⚠ Attempt failed: {last_error}", flush=True)
+
+    if last_error:
+        raise RuntimeError(last_error)
 
     # Find the output file — yt-dlp sanitizes the title itself
     final_path = None
