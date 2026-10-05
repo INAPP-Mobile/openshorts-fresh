@@ -1,5 +1,5 @@
 # ── Stage 1: build the React dashboard (Vite → dist/) ───────────────────────
-FROM node:22-slim AS frontend
+FROM node:26-slim AS frontend
 WORKDIR /build/dashboard
 # Install build deps first (layer cache), then npm deps, then build.
 COPY dashboard/package.json dashboard/package-lock.json* ./
