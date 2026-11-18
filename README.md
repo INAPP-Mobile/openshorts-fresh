@@ -99,7 +99,7 @@ Click the button at the top of this README. Railway builds the image, mounts a p
 3. If a YouTube URL was given, yt-dlp fetches the source MP4 locally (no vendor lock-in).
 4. Gemini picks highlight moments; ffmpeg crops each to 9:16 with smart tracking.
 5. `faster-whisper` transcribes audio; subtitles are burned in.
-6. The finished clips land under `/data/output/<job-id>/` and are streamable at `/videos/...`.
+6. The finished clips land under `/data/output/{job-id}/` and are streamable at `/videos/...`.
 
 ---
 
